@@ -1,8 +1,125 @@
 package gown
 
+import (
+	"io"
+)
+
 const (
 	wnrelease = "3.0"
 )
+
+// buffer sizes *** should these constants be in another source file? ***
+const (
+	SEARCHBUF = (200*1024) // *** long in wn.h ***
+	LINEBUF = (15*1024) /* 15K buffer to read index & data files */
+	SMLINEBUF = (3*1024) /* small buffer for output lines */
+	WORDBUF = 256 /* buffer for one word or collocation */
+)
+
+const (
+	ALLSENSES = 0 // pass to findtheinfo() if want all senses
+	MAXID = 15 // maximum id number in lexicographer file
+	MAXDEPTH = 20 // maximum tree depth - used to find cycles
+	MAXSENSE = 75 // maximum number of senses in database
+	MAX_FORMS = 5 // max # of different 'forms' word can have
+	MAXFNUM = 44 // maximum number of lexicographer files
+)
+
+/* Pointer type and search type counts */
+/* Pointers */
+const (
+	_ = iota
+	ANTPTR /* ! */
+	HYPERPTR /* @ */
+	HYPOPTR /* ~ */
+	ENTAILPTR /* * */
+	SIMPTR /* & */
+
+	ISMEMBERPTR /* #m */
+	ISSTUFFPTR /* #s */
+	ISPARTPTR /* #p */
+	HASMEMBERPTR /* %m */
+	HASSTUFFPTR /* %s */
+	HASPARTPTR /* %p */
+
+	MERONYM /* % (not valid in lexicographer file) */
+	HOLONYM /* # (not valid in lexicographer file) */
+	CAUSETO /* > */
+	PPLPTR /* < */
+	SEEALSOPTR /* ^ */
+	PERTPTR /* \ */
+	ATRIBUTE /* = */
+	VERBGROUP /* $ */
+	DERIVATION /* + */
+	CLASSIFICATION /* ; */
+	CLASS /* - */
+)
+
+/* Misc searches */
+const (
+	LASTTYPE = CLASS
+	SYNX = LASTTYPE + 1
+	FREQ = LASTTYPE + 2
+	FRAMES = LASTTYPE + 3
+	COORDS = LASTTYPE + 4
+	RELATIVES = LASTTYPE + 5
+	HMERONYM = LASTTYPE + 6
+	HHOLONYM = LASTTYPE + 7
+	WNGREP = LASTTYPE + 8
+	OVERVIEW = LASTTYPE + 9
+
+	MAXSEARCH = OVERVIEW
+
+	CLASSIF_START = MAXSEARCH + 1
+
+	CLASSIF_CATEGORY = CLASSIF_START // ;c
+	CLASSIF_USAGE = CLASSIF_START + 1 // ;u
+	CLASSIF_REGIONAL = CLASSIF_START + 2 // ;r
+
+	CLASSIF_END = CLASSIF_REGIONAL
+
+	CLASS_START = CLASSIF_END + 1
+
+	CLASS_CATEGORY = CLASS_START // -c
+	CLASS_USAGE = CLASS_START + 1 // -u
+	CLASS_REGIONAL = CLASS_START + 2 // -r
+
+	CLASS_END = CLASS_REGIONAL
+
+	INSTANCE = CLASS_END + 1 // @i
+	INSTANCES = CLASS_END + 2 // ~i
+
+	MAXPTR = INSTANCES
+)
+
+const (
+	NUMPARTS = 4
+	NUMFRAMES = 35
+)
+
+const (
+	_ = iota
+	NOUN
+	VERB
+	ADJ
+	ADV
+	SATELLITE
+	ADJSAT = SATELLITE
+)
+
+const (
+	ALL_POS = iota
+	PADJ // (p)
+	NPADJ // (a)
+	IPADJ // (ip)
+)
+
+var (
+	datafps [NUMPARTS + 1]io.Reader             // *** with or without pointer?? ***
+	indexfps [NUMPARTS + 1]io.Reader            // *** with or without pointer?? ***
+	sensefp, cntlistfp, keyindexfp, revkeyindexfp, vidxfilefp, vsentfilefp io.Reader
+)
+
 
 var lexfiles []string = []string{
 	"adj.all",		/* 0 */
@@ -78,15 +195,15 @@ var ptrtyp []string = []string{
 	";",			/* 21 CLASSIFICATION */
 	"-",			/* 22 CLASS */
 	/* additional searches, but not pointers.  */
-	"",				/* SYNS */
-	"",				/* FREQ */
+	"",			/* SYNS */
+	"",			/* FREQ */
 	"+",			/* FRAMES */
-	"",				/* COORDS */
-	"",				/* RELATIVES */
-	"",				/* HMERONYM */
-	"",				/* HHOLONYM */
-	"",				/* WNGREP */
-	"",				/* OVERVIEW */
+	"",			/* COORDS */
+	"",			/* RELATIVES */
+	"",			/* HMERONYM */
+	"",			/* HHOLONYM */
+	"",			/* WNGREP */
+	"",			/* OVERVIEW */
 	";c",			/* CLASSIF_CATEGORY */
 	";u",			/* CLASSIF_USAGE */
 	";r",			/* CLASSIF_REGIONAL */
