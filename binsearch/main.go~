@@ -1,0 +1,11 @@
+package main
+
+import (
+	"fmt"
+//	"./binsearch"
+)
+
+func main() {
+	data := [4]int{1,2,3,4}
+	fmt.Println(data)
+}

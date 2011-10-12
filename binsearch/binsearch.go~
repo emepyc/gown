@@ -1,0 +1,14 @@
+package binsearch
+
+import (
+//	"fmt"
+	"sort"
+)
+
+type Interface interface {
+	sort.Interface
+}
+
+
+
+
