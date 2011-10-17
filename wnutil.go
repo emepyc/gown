@@ -6,11 +6,9 @@ import (
 	"bytes"
 )
 
-type XX struct {
-	
-}
+type wndb []*os.File
 
-func do_init() os.Error { // *** Is having datafps and indexfps as globals, the best way to proceed?? ***
+func do_init() os.Error {
 	// Find base directory for database, for now, we look only in the env var WNSEARCHDIR
 	searchdir := os.Getenv("WNSEARCHDIR")
 	var err os.Error
@@ -65,6 +63,15 @@ func do_init() os.Error { // *** Is having datafps and indexfps as globals, the 
 	}
 
 	return nil
+}
+
+func loadIndex() {
+	if verbose {
+		fmt.Fprintf(os.STDERR, "Loading Indexes")
+	}
+	for i:=1; i <= 4; i++ {
+		
+	}
 }
 
 /* Count the number of underscore or space separated words in a string. */
