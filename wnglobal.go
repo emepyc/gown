@@ -115,8 +115,8 @@ const (
 )
 
 var (
-	datafps [NUMPARTS + 1]io.Reader             // *** with or without pointer?? ***
-	indexfps [NUMPARTS + 1]io.Reader            // *** with or without pointer?? ***
+//	datafps [NUMPARTS + 1]io.Reader             // *** with or without pointer?? ***
+//	indexfps [NUMPARTS + 1]io.Reader            // *** with or without pointer?? ***
 	sensefp, cntlistfp, keyindexfp, revkeyindexfp, vidxfilefp, vsentfilefp io.Reader
 )
 
