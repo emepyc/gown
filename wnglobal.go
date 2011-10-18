@@ -8,6 +8,16 @@ const (
 	wnrelease = "3.0"
 )
 
+const (
+	LEMMA = iota   // 0
+	POS            // 1
+	SYNSET_CNT     // 2
+	PTR_CNT        // 3
+	SENSE_CNT      // 4
+	TAGSENSE_CNT   // 5
+	SYNSET_OFFSET  // 6
+)
+
 // buffer sizes *** should these constants be in another source file? ***
 const (
 	SEARCHBUF = (200*1024) // *** long in wn.h ***
