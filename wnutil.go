@@ -16,7 +16,7 @@ type indexInfo struct {
 	lemma []byte,
 	pos indexOffset,
 	offsets []indexOffset,
-	sense_cnt, p_cnt int,
+	tagsense_cnt int,
 }
 
 type Indexer interface {
@@ -169,10 +169,12 @@ func strsubst(src []byte, from, to byte) []byte {
 }
 
 func parseIndexLine(l []byte) *indexInfo {
-	newIndexInfo := &indexInfo{}
-	flds :=
-	lemma, pos, sense_cnt, p_cnt, rest_of_line := bytes.SplitN(l, []byte(' '), 5) // WARNING fields only separated by ' '?
-	for i := 0; i < p_cnt; i++ {
-		
-	}
+	newIndexInfo := indexInfo{}
+	fields := bytes.Fields(l)
+	ptr_cnt := fields[PTR_CNT]
+	newIndexInfo.lemma = fields[LEMMA]
+	newIndexInfo.pos = fields[POS]
+	newIndexInfo.tagsense_cnt = fields[TAGSENSE_CNT + ptr_cnt]
+	newIndexInfo.offsets = fields[(SYNSET_OFFSET + ptr_cnt) : ]
+	return &newIndexInfo
 }
