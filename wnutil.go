@@ -2,36 +2,88 @@ package gown
 
 import (
 	"os"
+	"io"
 	"fmt"
 	"bytes"
+	"bufio"
 )
 
-type wndb []*os.File
+type indexOffset uint64
+
+type indexMap map[string]indexOffset // TODO: Profile the amount of memory for in-memory indexing
+
+type indexInfo struct {
+	lemma []byte,
+	pos indexOffset,
+	offsets []indexOffset,
+	sense_cnt, p_cnt int,
+}
+
+type Indexer interface {
+	Lookup() indexOffset
+}
+
+type indexFiles []*os.File
+type dataFiles  []*os.File
 
 func do_init() os.Error {
-	// Find base directory for database, for now, we look only in the env var WNSEARCHDIR
-	searchdir := os.Getenv("WNSEARCHDIR")
-	var err os.Error
-
-	for i:=1; i<NUMPARTS; i++ {
-		datapath := fmt.Sprintf("%s/data.%s", searchdir, partnames[i]) // *** NOT PORTABLE ***
-		fmt.Fprintf(os.Stderr, "Opening data file: %s in slot %d\n", datapath, i)
-		datafps[i], err = os.Open(datapath) 
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "WordNet library error: Can't open datafile (%s)\n", datapath)
-			return err
-		}
+	searchdir := os.Getenv("WNSEARCHDIR") // *** TODO: allow other ways to get the path to these files ***
+	                                      // Also check for errors from os.Getenv ??
+	wndb, err := loadIndex(searchdir) //
+	if err != nil {
+		fmt.Fprintf(os.STDERR, "I can't load the indexes files from %s\n", searchdir)
+		os.Exit(1) // Return error?
 	}
-	for i:=1; i<NUMPARTS; i++ {
-		indexpath := fmt.Sprintf("%s/index.%s", searchdir, partnames[i]) // *** NOT PORTABLE ***
-		fmt.Fprintf(os.Stderr, "Opening data file: %s in slot %d\n", indexpath, i)
-		indexfps[i], err = os.Open(indexpath)
+}
+
+// Loads an array of io.Reader's containing handlers for the datafiles
+// For now, the indexes are loaded in a map (in memory)
+// TODO: Check for WordNet version. It is stated more or less at the beginning of the file
+func loadIndex(searchdir []byte) (Indexer, os.Error) {
+	fmt.Fprintf(os.Stderr, "Reading Index (in memory)...") // TODO: Profile with timer
+	indexMap := make(indexMap, 363000) // Current number of lines in index.*
+	for i:=1; i<=NUMPARTS; i++ {
+		indexpath := fmt.Sprintf("%s/index.%s", searchdir, partnames[i]) // TODO: Make this portable
+		indexfh, err := os.Open(indexpath)
+		bufindexfh := bufio.NewReader(io.Reader(indexfh))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "WordNet library error: Can't open indexfile (%s)\n", indexpath)
-			return err
+			return nil, err
+		}
+		for {
+			line, isPrefix, err := bufindexfh.ReadLine()
+			if isPrefix {
+				fmt.Fprintf(os.Stderr, "Line too long reading file (%s)\n", indexpath)
+				os.Exit(1) // TODO: Exit?
+			}
+			if err == os.EOF {
+				return indexMap, nil
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "An error occurred while reading line from (%s)\n%s\n", indexpath, line)
+			}
+			newIndexInfo := parseIndexLine(line)
 		}
 	}
+	fmt.Fprintf(os.Stderr, "Done\n")
 
+	return Indexer(indexMap), nil
+}
+
+// Loads an array of io.Reader's containing handlers for the datafiles
+func loadData(searchdir []byte) (dataFiles, os.Error) {
+	datafps := [NUMPARTS+1]io.Reader
+	for i:=1; i<=NUMPARTS; i++ {
+		datapath := fmt.Sprintf("%s/data.%s", searchdir, partnames[i]) // TODO: Make this portable
+		fmt.Fprintf(os.Stderr, "Opening data file: %s in slot %d\n", datapath, i)
+		datafps[i], err := os.Open(datapath) 
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WordNet library error: Can't open datafile (%s)\n", datapath)
+			return nil,err
+		}
+	}
+	return datafps, nil
+}
 	/* This file isn't used by the library and doesn't have to
 	 be present.  No error is reported if the open fails. */
 	sensepath := fmt.Sprintf("%s/index.sense", searchdir) // *** NOT PORTABLE ***
@@ -67,10 +119,10 @@ func do_init() os.Error {
 
 func loadIndex() {
 	if verbose {
-		fmt.Fprintf(os.STDERR, "Loading Indexes")
+		fmt.Fprintf(os.Stderr, "Loading Indexes")
 	}
 	for i:=1; i <= 4; i++ {
-		
+				
 	}
 }
 
@@ -116,3 +168,11 @@ func strsubst(src []byte, from, to byte) []byte {
 	return dest
 }
 
+func parseIndexLine(l []byte) *indexInfo {
+	newIndexInfo := &indexInfo{}
+	flds :=
+	lemma, pos, sense_cnt, p_cnt, rest_of_line := bytes.SplitN(l, []byte(' '), 5) // WARNING fields only separated by ' '?
+	for i := 0; i < p_cnt; i++ {
+		
+	}
+}
