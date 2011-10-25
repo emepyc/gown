@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"bytes"
 	"bufio"
+	"strconv"
 )
 
 const NINDEXRECS = 363000 // Current number of lines in index.* (wc -l index.*)
 
-type indexMap map[string]uint64 // TODO: Profile in-memory indexing
+type indexMap map[string][]uint64 // TODO: Profile in-memory indexing
 type tagSenseMap map[string]int
 type InMemIndex struct {
 	indexMaps [4]indexMap
@@ -28,8 +29,8 @@ type Indexer interface {
 //	Lookup() indexOffset
 }
 
-type indexFiles []*os.File
-type dataFiles  []*os.File
+type indexFiles []io.Reader
+type dataFiles  []io.Reader
 
 type WordNetDb struct {
 	Index Indexer
@@ -38,14 +39,21 @@ type WordNetDb struct {
 
 func New() *WordNetDb {
 	searchdir := os.Getenv("WNSEARCHDIR")
+	var err os.Error
+	wndb := WordNetDb{}
 
-	wndb, err := loadIndex(searchdir)
+	wndb.Index, err = loadIndex(searchdir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "I can't load the indexes files from %s\n", searchdir)
 		os.Exit(1) // Return error? Without indexes we can't do anything
 	}
 
-	
+	wndb.Data, err = dataFh(searchdir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "I can't open the data files from %s\n", searchdir)
+		os.Exit(1)
+	}
+	return &wndb
 }
 
 // Loads an Indexer
@@ -86,12 +94,12 @@ func loadIndex(searchdir string) (Indexer, os.Error) {
 	}
 	fmt.Fprintf(os.Stderr, "Done\n")
 
-	return Indexer(indexMap), nil
+	return index, nil
 }
 
 // Loads an array of io.Reader's containing handlers for the datafiles
-func dataFh(searchdir []byte) (dataFiles, os.Error) {
-	var err = os.Error
+func dataFh(searchdir string) (dataFiles, os.Error) {
+	var err os.Error
 	datafps := make([]io.Reader, NUMPARTS+1)
 	for i:=1; i<=NUMPARTS; i++ {
 		datapath := fmt.Sprintf("%s/data.%s", searchdir, partnames[i]) // TODO: Make this portable
@@ -181,24 +189,28 @@ func strsubst(src []byte, from, to byte) []byte {
 
 func parseIndexLine(l []byte) *indexInfo {
 	newIndexInfo := indexInfo{}
-	var error os.Error
+	var err os.Error
 	fields := bytes.Fields(l)
-	ptr_cnt := fields[PTR_CNT]
+	ptr_cnt, err := strconv.Atoi(string(fields[PTR_CNT]))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to int\n", fields[PTR_CNT])
+		os.Exit(1)
+	}
 	newIndexInfo.lemma = fields[LEMMA]
-	newIndexInfo.pos, err = strconv.Atoi64(string(fields[POS]))
+	newIndexInfo.pos, err = strconv.Atoui64(string(fields[POS]))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to uint64\n", fields[POS])
 		os.Exit(1) // log.Fatal?
 	}
-	newIndexInfo.tagsense_cnt, err = strconv.Atoi32(string(fields[TAGSENSE_CNT + ptr_cnt]))
+	newIndexInfo.tagsense_cnt, err = strconv.Atoi(string(fields[TAGSENSE_CNT + ptr_cnt]))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to int32\n", fields[TAGSENSE_CNT + ptr_cnt])
 		os.Exit(1)
 	}
 	offsets_strs := fields[(SYNSET_OFFSET + ptr_cnt) : ]
-	offsets := make([]uint64, len(offsets_str))
+	offsets := make([]uint64, len(offsets_strs))
 	for i, offset := range offsets_strs {
-		offsets[i], err = strconv.Atoi64(offset)
+		offsets[i], err = strconv.Atoui64(string(offset))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "I had a problem trying to convert the offset %s to int63\n", offset)
 			os.Exit(1) // log.Fatal?
