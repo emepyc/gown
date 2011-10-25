@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"./gown"
 )
 
 func main() {
-	indexFiles := gown.New()
+	gownDB := gown.New()
+	if gownDB != nil {
+	}
 }
 
