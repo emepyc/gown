@@ -14,13 +14,13 @@ const NINDEXRECS = 363000 // Current number of lines in index.* (wc -l index.*)
 type indexMap map[string][]uint64 // TODO: Profile in-memory indexing
 type tagSenseMap map[string]int
 type InMemIndex struct {
-	indexMaps [4]indexMap
-	tagSenseMaps [4]tagSenseMap
+	indexMaps [NUMPARTS+1]indexMap
+	tagSenseMaps [NUMPARTS+1]tagSenseMap
 }
 
 type indexInfo struct {
 	lemma []byte
-	pos uint64
+	pos byte // 'n', 'v', 'a', 'r' ... should we have these in a map? probably yes
 	offsets []uint64
 	tagsense_cnt int
 }
@@ -60,19 +60,32 @@ func New() *WordNetDb {
 // For now, the indexes are loaded in a map (in memory)
 // TODO: Check for WordNet version. It is stated more or less at the beginning of the file
 func loadIndex(searchdir string) (Indexer, os.Error) {
-	fmt.Fprintf(os.Stderr, "Reading Index (in memory)...") // TODO: Time this
+	fmt.Fprintf(os.Stderr, "Reading Index (in memory)...\n") // TODO: Time this
 	index := InMemIndex{}
+
 	for i:=1; i<=NUMPARTS; i++ {
 		indexMap := make(indexMap, NINDEXRECS)
 		tagSenseMap := make(tagSenseMap, NINDEXRECS)
 		indexpath := fmt.Sprintf("%s/index.%s", searchdir, partnames[i]) // TODO: Make this portable
+		fmt.Fprintf(os.Stderr, "Processing index file %s\n", indexpath)
 		indexfh, err := os.Open(indexpath)
-		bufindexfh := bufio.NewReader(io.Reader(indexfh))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "WordNet library error: Can't open indexfile (%s)\n", indexpath)
 			return nil, err
 		}
+
+		defer func() {
+			e := indexfh.Close()
+			if e!=nil {
+				fmt.Fprintf(os.Stderr, "Problem closing the file %s: %s\n", indexpath, e)
+			}
+		}()
+
+		bufindexfh := bufio.NewReader(io.Reader(indexfh))
+		nlines := 0
 		for {
+			nlines++
+			fmt.Fprintf(os.Stderr, "\r%d lines                 ", nlines)
 			line, isPrefix, err := bufindexfh.ReadLine()
 			if isPrefix {
 				fmt.Fprintf(os.Stderr, "Line too long reading file (%s)\n", indexpath)
@@ -81,10 +94,13 @@ func loadIndex(searchdir string) (Indexer, os.Error) {
 			if err == os.EOF {
 				index.indexMaps[i] = indexMap
 				index.tagSenseMaps[i] = tagSenseMap
-				continue
+				break
 			}
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "An error occurred while reading line from (%s)\n%s\n", indexpath, line)
+			}
+			if line[0] == ' ' { // header line
+				continue
 			}
 			newIndexInfo := parseIndexLine(line)
 			key := string(newIndexInfo.lemma)
@@ -188,16 +204,22 @@ func strsubst(src []byte, from, to byte) []byte {
 }
 
 func parseIndexLine(l []byte) *indexInfo {
+//	fmt.Fprintf (os.Stderr, "Processing line:\n%s\n", l)
 	newIndexInfo := indexInfo{}
 	var err os.Error
 	fields := bytes.Fields(l)
 	ptr_cnt, err := strconv.Atoi(string(fields[PTR_CNT]))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to int\n", fields[PTR_CNT])
+		fmt.Fprintf(os.Stderr, "I had a problem trying to convert '%s' to int\n", fields[PTR_CNT])
 		os.Exit(1)
 	}
 	newIndexInfo.lemma = fields[LEMMA]
-	newIndexInfo.pos, err = strconv.Atoui64(string(fields[POS]))
+//	newIndexInfo.pos, err = strconv.Atoui64(string(fields[POS]))
+	if len(fields[POS]) > 1 {
+		fmt.Fprintf(os.Stderr, "POS has to be 1 letter code ('n', 'v', 'a' or 'r') and I have %s\n", fields[POS])
+		os.Exit(1)
+	}
+	newIndexInfo.pos = fields[POS][0]
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to uint64\n", fields[POS])
 		os.Exit(1) // log.Fatal?
