@@ -113,6 +113,12 @@ type SearchResults struct {
 
 // Find word in index file and return parsed entry in data structure
 // Input word must be exact match of string in database
+func (wndb *WordNetDb) Lookup (word []byte, dbase int) *Synset {
+	
+}
+
+
+
 func (i Index) index_lookup (word []byte, dbase int) *Index {
 	idx := &Index{}
 	if dbase > len(i.dbs)-1 {
