@@ -18,6 +18,13 @@ const (
 	SYNSET_OFFSET  // 6
 )
 
+
+const (
+	WORD = iota
+	POS
+	SENSE
+)
+
 // buffer sizes *** should these constants be in another source file? ***
 const (
 	SEARCHBUF = (200*1024) // *** long in wn.h ***
