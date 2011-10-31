@@ -189,18 +189,6 @@ func cntwords(s []byte, separator byte) (wdcnt int) {
 	return
 }
 
-/* Convert to lowercase and remove trailing adjective marker if found */
-func strtolower(str []byte) []byte {
-	ret := make ([]byte, len(str))
-	for i, ch := range str {
-		if ch == '(' {
-			return bytes.ToLower(ret)
-		}
-		ret[i] = ch
-	}
-	return bytes.ToLower(ret)
-}
-
 /* Replace all occurences of 'from' with 'to' in 'str' */
 func strsubst(src []byte, from, to byte) []byte {
 	dest := make([]byte, len(src))
