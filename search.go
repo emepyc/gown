@@ -3,6 +3,7 @@ package gown
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 const (
@@ -130,4 +131,23 @@ func (i Index) index_lookup (word []byte, dbase int) *Index {
 	}
 
 	
+}
+
+func (wndb *WordNetDb) QuerySense (str string) [][]byte {
+	fmt.Fprintf(os.Stderr, "(QuerySense) STRING=%s\n", str) // Only for dubugging
+	parts := strings.Split(str, "#")
+	lword := strToLower(parts[WORD])
+}
+
+
+/* Convert to lowercase and remove trailing adjective marker if found */
+func strToLower(str []byte) []byte {
+	ret := make ([]byte, len(str))
+	for i, ch := range str {
+		if ch == '(' {
+			return bytes.ToLower(ret)
+		}
+		ret[i] = ch
+	}
+	return bytes.ToLower(ret)
 }
