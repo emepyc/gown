@@ -11,22 +11,23 @@ import (
 
 const NINDEXRECS = 363000 // Current number of lines in index.* (wc -l index.*)
 
-type indexMap map[string][]uint64 // TODO: Profile in-memory indexing
+type indexMap map[string][]int64 // TODO: Profile in-memory indexing
 type tagSenseMap map[string]int
 type InMemIndex struct {
 	indexMaps [NUMPARTS+1]indexMap
 	tagSenseMaps [NUMPARTS+1]tagSenseMap
 }
 
+// I think this is not used
 type indexInfo struct {
 	lemma []byte
 	pos byte // 'n', 'v', 'a', 'r' ... should we have these in a map? probably yes
-	offsets []uint64
+	offsets []int64
 	tagsense_cnt int
 }
 
 type Indexer interface {
-	Lookup([]byte, int) (uint64, os.Error)
+	Lookup([]byte, int) ([]int64, os.Error)
 }
 
 type indexFiles []io.Reader
@@ -37,16 +38,20 @@ type WordNetDb struct {
 	Data dataFiles
 }
 
-func (m indexMap) Lookup (word []byte) uint64, os.Error {
-	offset, ok := m[string(word)]
+func (m indexMap) Lookup(word []byte, db int) ([]int64, os.Error) {
+	offsets, ok := m[string(word)]
 	if !ok {
-		newErr := os.NewError("Word " + word + " not present in db")
-		return 0, newErr
+		newErr := os.NewError("Word <" + word + "> not present in db")
+		return nil, newErr
 	}
-	return offset, nil
+	return offsets, nil
 }
 
-func (wndb *WordNetDb) Lookup (word []byte
+func (d Data) dataLookup(pos int, offset int64) []byte {
+	fh := d[pos]
+	os.File(fh).Seek(offset, os.SEEK_SET)
+	line := 
+}
 
 func New() *WordNetDb {
 	searchdir := os.Getenv("WNSEARCHDIR")
@@ -219,19 +224,16 @@ func parseIndexLine(l []byte) *indexInfo {
 		os.Exit(1)
 	}
 	newIndexInfo.pos = fields[POS][0]
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to uint64\n", fields[POS])
-		os.Exit(1) // log.Fatal?
-	}
-	newIndexInfo.tagsense_cnt, err = strconv.Atoi(string(fields[TAGSENSE_CNT + ptr_cnt]))
+
+newIndexInfo.tagsense_cnt, err = strconv.Atoi(string(fields[TAGSENSE_CNT + ptr_cnt]))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "I had a problem trying to convert %s to int32\n", fields[TAGSENSE_CNT + ptr_cnt])
 		os.Exit(1)
 	}
 	offsets_strs := fields[(SYNSET_OFFSET + ptr_cnt) : ]
-	offsets := make([]uint64, len(offsets_strs))
+	offsets := make([]int64, len(offsets_strs))
 	for i, offset := range offsets_strs {
-		offsets[i], err = strconv.Atoui64(string(offset))
+		offsets[i], err = strconv.Atoi64(string(offset))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "I had a problem trying to convert the offset %s to int63\n", offset)
 			os.Exit(1) // log.Fatal?
