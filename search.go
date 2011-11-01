@@ -48,17 +48,34 @@ var (
 	// ???
 //}
 
-type Index struct {
-	idxoffset int64 // byte offset of entry in index file
-	wd []byte // word string
-	pos []byte // part of speech
-	sense_cnt int // sense (collins) count
-	off_cnt int // number of offsets
-	tagget_cnt int // number of senses that are tagged
-	offset uint64 // offsets of synsets containing word
-	ptruse_cnt int // number of pointers used
-	ptruse int // pointers used. ***IN wn.h THIS IS A POINTER TO A INT***
+type Query struct {
+	option []byte, // user's search request
+	search int, // search to pass findtheinfo()
+	pos int, // part-of-speech to pass findtheinfo()
+	sense int, // Perform search on sense number # only
+	rel []byte // Relation
+	// helpmsgidx int, // index into help message table
+	// label []char, // text for search header message
 }
+
+var relNameSyn = map[string][]string {
+	"ants" : []string{"!"},
+	"hype" : []string{"@"},
+	"inst" : []string{"@i"},
+	"hypes" : []string{"@", "@i"},
+}
+
+// type Index struct {
+// 	idxoffset int64 // byte offset of entry in index file
+// 	wd []byte // word string
+// 	pos []byte // part of speech
+// 	sense_cnt int // sense (collins) count
+// 	off_cnt int // number of offsets
+// 	tagget_cnt int // number of senses that are tagged
+// 	offset uint64 // offsets of synsets containing word
+// 	ptruse_cnt int // number of pointers used
+// 	ptruse int // pointers used. ***IN wn.h THIS IS A POINTER TO A INT***
+// }
 
 type Synset struct {
 	hereiam int64 // current file position
@@ -113,30 +130,54 @@ type SearchResults struct {
 }
 
 // Find word in index file and return parsed entry in data structure
-// Input word must be exact match of string in database
-func (wndb *WordNetDb) Lookup (word []byte, dbase int) *Synset {
-	
+// Input word must be exact match of string in database (case insensitive)
+func (wndb *WordNetDb) indexOffsetLookup (query Query) []int64 {
+	lword := strToLower(query.option)
+	offsets := wndb.Index.Lookup(lword, query.pos)
+
+	if query.sense != 0 {
+		offsets = offsets[:query.sense]
+	}
+
+	return offsets
 }
 
 
+func (wndb *WordNetDb) QuerySense (query *Query) [][]byte {
+	fmt.Fprintf(os.Stderr, "(QuerySense) STRING=%s#%d#%d#%d\n", query.option, query.search, query.pos, query.sense) // Only for dubugging
 
-func (i Index) index_lookup (word []byte, dbase int) *Index {
-	idx := &Index{}
-	if dbase > len(i.dbs)-1 {
-		return nil
-	}
-	if i.dbs[i] == nil {
-		fmt.Fprintf(os.Stderr, "WordNet library error: %s indexfile not open\n");
-		return nil
+	lword := strToLower(query.option)
+
+	if query.sense != 0 {
+		if query.rel == nil {
+			fmt.Fprintf(os.Stderr, "(QuerySense) Relation required\n")
+			os.Exit(1) // return err?
+		}
+		if rel, ok := relSymName[string(query.rel)]; ok {
+			query.rel = rel
+		} else if _, ok := relNameSym[string(query.rel)]; ok || string(query.rel) == "glos" || string(query.rel) == "syns" {
+		} else {
+			fmt.Fprintf(os.Stderr, "(QuerySense) Bad relation: %s\n", query.rel)
+			os.Exit(1) // return err?
+		} 
+
+		offsets = wndb.indexOffsetLookup(lword, query.pos, query.sense)
+		offset = offset[0]
+		dataLine := dataLookup(query.pos, offset)
+		
 	}
 
+// 	if query.pos == ALL_POS {
+// 		outsenses := make([][]byte, 4) // 4?
+// 		for pos:=1; pos <= NUMPARTS; pos++ {
+// 			sense := wndb.Lookup(query)
+// 			outsenses[pos-1] = sense // pos-1??
+// 		}
+// 		return outsenses
+// 	}
+// 	outsenses := make([][]byte,1)
+// [...]
 	
-}
-
-func (wndb *WordNetDb) QuerySense (str string) [][]byte {
-	fmt.Fprintf(os.Stderr, "(QuerySense) STRING=%s\n", str) // Only for dubugging
-	parts := strings.Split(str, "#")
-	lword := strToLower(parts[WORD])
 }
 
 
@@ -151,3 +192,4 @@ func strToLower(str []byte) []byte {
 	}
 	return bytes.ToLower(ret)
 }
+
