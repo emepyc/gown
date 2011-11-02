@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"bytes"
 )
 
 const (
@@ -148,6 +149,8 @@ func (wndb *WordNetDb) QuerySense (query *Query) [][]byte {
 
 	lword := strToLower(query.option)
 
+	rtn := make([][]byte, 0, 10) // 10?
+
 	if query.sense != 0 {
 		if query.rel == nil {
 			fmt.Fprintf(os.Stderr, "(QuerySense) Relation required\n")
@@ -164,21 +167,25 @@ func (wndb *WordNetDb) QuerySense (query *Query) [][]byte {
 		offsets = wndb.indexOffsetLookup(lword, query.pos, query.sense)
 		offset = offset[0]
 		dataLine := dataLookup(query.pos, offset)
+
+		if rel eq "glos" {
+			lastIndex := bytes.LastIndex(dataLine, "| ")
+			// if lastIndex == -1??
+			rtn = append(rtn, dataLine[lastIndex+1:])
+		} else if rel eq "syns" {
+			allSenses = getAllSenses(query.pos, offset)
+		}
 		
 	}
-
-// 	if query.pos == ALL_POS {
-// 		outsenses := make([][]byte, 4) // 4?
-// 		for pos:=1; pos <= NUMPARTS; pos++ {
-// 			sense := wndb.Lookup(query)
-// 			outsenses[pos-1] = sense // pos-1??
-// 		}
-// 		return outsenses
-// 	}
-// 	outsenses := make([][]byte,1)
-// [...]
-	
 }
+
+func (wndb *WordNetDb) getAllSenses (pos int, offset int64) [][]byte { // []byte in return?
+	fmt.Fprintf(os.Stderr, "(getAllSenses) pos=%d offset=%d\n", pos, offset) // debugging
+
+	rtn := make([][]byte, 0, 10) // 10?
+	line
+}
+
 
 
 /* Convert to lowercase and remove trailing adjective marker if found */
