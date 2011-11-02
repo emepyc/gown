@@ -10,6 +10,7 @@ import (
 )
 
 const NINDEXRECS = 363000 // Current number of lines in index.* (wc -l index.*)
+const BUFFSIZE = 3072 // for reading lines in data
 
 type indexMap map[string][]int64 // TODO: Profile in-memory indexing
 type tagSenseMap map[string]int
@@ -50,7 +51,27 @@ func (m indexMap) Lookup(word []byte, db int) ([]int64, os.Error) {
 func (d Data) dataLookup(pos int, offset int64) []byte {
 	fh := d[pos]
 	os.File(fh).Seek(offset, os.SEEK_SET)
-	line := 
+	
+	buffer := make([]byte, BUFFSIZE) // initial size of the buffer is 3kb
+	line := make([]byte, 0, BUFFSIZE)
+	prevLen := 0
+	for {
+		prevLen = len(line)
+		n, err := os.File(fh).Read(buffer) // we read the next 3kb (or less)
+		if err != nil && err != os.EOF {
+			fmt.Fprintf(os.Stderr, "Error while reading file: %s\n", err)
+			os.Exit(1) // return err?
+		}
+		line = append(line, buffer)
+		until := IndexByte(buffer, '\n')
+		if until > 0 { // We have a full line
+			return line[:prevLen+until]
+		}
+		if err == os.EOF || n < BUFFSIZE {
+			return line
+		}
+	}
+	return nil // We cant' be here
 }
 
 func New() *WordNetDb {
