@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"bytes"
+	"encoding/hex"
 )
 
 const (
@@ -48,6 +49,21 @@ var (
 //type IndexDB struct {
 	// ???
 //}
+
+type lemma struct {
+	word []byte,
+	lex_id int, // 1-digit hexadecimal integer
+}
+
+type dataData struct {
+	synset_offset int64, // Current byte offset in the file represented as an 8-digit dec integer
+	lex_filenum int, // 2-digit integer
+	ss_type byte, // n => NOUN, v => VERB, a => ADJECTIVE, s => ADJECTIVE SATELLITE, r => ADVERB
+	w_cnt int, // 2-digit hexadecimal integer
+	lemmas []*lemma
+	gloss []byte
+
+}
 
 type Query struct {
 	option []byte, // user's search request
@@ -179,14 +195,54 @@ func (wndb *WordNetDb) QuerySense (query *Query) [][]byte {
 	}
 }
 
-func (wndb *WordNetDb) getAllSenses (pos int, offset int64) [][]byte { // []byte in return?
-	fmt.Fprintf(os.Stderr, "(getAllSenses) pos=%d offset=%d\n", pos, offset) // debugging
-
-	rtn := make([][]byte, 0, 10) // 10?
-	line
+func parseDataLine(dataLine []byte) *dataData, os.Error {
+	data := &dataData{}
+	// gloss
+	lastIndex := bytes.LastIndex(dataLine, "| ")
+	data.gloss = dataLine[lastIndex:]
+	return data
 }
 
+func (wndb *WordNetDb) getAllSenses(dataLine []byte) [][]byte {
+	fmt.Fprintf(os.Stderr, "(getAllSenses) line=%s\n", dataLine) // debugging
 
+	rtn := make([][]byte, 0, 10) // 10?
+	dataParts := bytes.SplitN(dataLine, []byte{' '}, 5)
+	w_cnt, err := x2i(dataParts[3])
+
+	words := make([][]byte, w_cnt)
+	for i:=0; i<w_cnt; i++ {
+		words[i]
+	}
+}
+
+func x2i(src []byte) (int, os.Error) {
+	if len(src) > 2 {
+		return 0, hex.InvalidHexCharError()
+	}
+	d1, ok := fromHexChar(src[0])
+	if !ok {
+		return 0, hex.InvalidHexCharError(src[0])
+	}
+	d2, ok := fromHexChar(src[1])
+	if !ok {
+		return 0, hex.InvalidHexCharError(src[1])
+	}
+	val := int(d1)*16 + int(d2)
+	return val, nil
+}
+
+fromHexChar(c byte) (byte, bool) {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0', true
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10, true
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
+}
 
 /* Convert to lowercase and remove trailing adjective marker if found */
 func strToLower(str []byte) []byte {
