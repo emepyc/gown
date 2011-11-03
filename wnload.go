@@ -48,7 +48,7 @@ func (m indexMap) Lookup(word []byte, db int) ([]int64, os.Error) {
 	return offsets, nil
 }
 
-func (d Data) dataLookup(pos int, offset int64) []byte {
+func (d Data) dataLookup(pos int, offset int64) []byte { // ret os.Error
 	fh := d[pos]
 	os.File(fh).Seek(offset, os.SEEK_SET)
 	
