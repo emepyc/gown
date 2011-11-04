@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"bytes"
+	"io"
 	"os"
 	"log"
 	"strconv"
@@ -10,21 +12,21 @@ import (
 )
 
 type Data os.File
+
 const BUFFSIZE = 10
 
 type lemma struct {
-	word []byte
+	word   []byte
 	lex_id int // 1-digit hexadecimal integer
 }
 
 type dataData struct {
 	synset_offset int64 // Current byte offset in the file represented as an 8-digit dec integer
-	lex_filenum int // 2-digit integer
-	ss_type byte // n => NOUN, v => VERB, a => ADJECTIVE, s => ADJECTIVE SATELLITE, r => ADVERB
-	w_cnt int // 2-digit hexadecimal integer
-	lemmas []*lemma
-	gloss []byte
-
+	lex_filenum   int   // 2-digit integer
+	ss_type       byte  // n => NOUN, v => VERB, a => ADJECTIVE, s => ADJECTIVE SATELLITE, r => ADVERB
+	w_cnt         int   // 2-digit hexadecimal integer
+	lemmas        []*lemma
+	gloss         []byte
 }
 
 func dataLookup(fh *os.File, offset int64) []byte {
@@ -32,14 +34,14 @@ func dataLookup(fh *os.File, offset int64) []byte {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	buffer := make([]byte, BUFFSIZE) // initial size of the buffer is 3kb
 	line := make([]byte, 0, BUFFSIZE)
 	prevLen := 0
 	for {
 		prevLen = len(line)
 		n, err := fh.Read(buffer) // we read the next 3kb (or less)
-		if err != nil && err != os.EOF {
+		if err != nil && err != io.EOF {
 			log.Fatal(err)
 		}
 		line = append(line, buffer[:]...)
@@ -47,7 +49,7 @@ func dataLookup(fh *os.File, offset int64) []byte {
 		if until > 0 { // We have a full line
 			return line[:prevLen+until]
 		}
-		if err == os.EOF || n < BUFFSIZE {
+		if err == io.EOF || n < BUFFSIZE {
 			return line
 		}
 	}
@@ -55,14 +57,14 @@ func dataLookup(fh *os.File, offset int64) []byte {
 	return nil
 }
 
-func parseDataLine(dataLine []byte) (*dataData, os.Error) {
+func parseDataLine(dataLine []byte) (*dataData, error) {
 	data := &dataData{}
-	var err os.Error
+	var err error
 
 	// gloss
-	lastIndex := bytes.LastIndex(dataLine, []byte{'|',' '})
+	lastIndex := bytes.LastIndex(dataLine, []byte{'|', ' '})
 	if lastIndex == -1 {
-		return nil, os.NewError(`No gloss delimiter found "| " in line`)
+		return nil, errors.New(`No gloss delimiter found "| " in line`)
 	}
 	data.gloss = dataLine[lastIndex+2:]
 
@@ -87,11 +89,13 @@ func parseDataLine(dataLine []byte) (*dataData, os.Error) {
 	// ss_type
 	switch ss_type := dataLine[12]; {
 	case ss_type == 'n' ||
-			ss_type == 'v' ||
-			ss_type == 'a' ||
-			ss_type == 's' ||
-			ss_type == 'r' : data.ss_type = ss_type
-	default : return nil, os.NewError(fmt.Sprintf("Invalid ss_type: %c\n", ss_type))
+		ss_type == 'v' ||
+		ss_type == 'a' ||
+		ss_type == 's' ||
+		ss_type == 'r':
+		data.ss_type = ss_type
+	default:
+		return nil, errors.New(fmt.Sprintf("Invalid ss_type: %c\n", ss_type))
 	}
 
 	// w_cnt
@@ -102,13 +106,13 @@ func parseDataLine(dataLine []byte) (*dataData, os.Error) {
 		return nil, err
 	}
 	data.w_cnt = w_cnt
-	
+
 	// lemmas
 	lemmas := make([]*lemma, w_cnt)
-	posInLine := 17
-	for i:=0; i<w_cnt; i++ {
-		posInLine := posInLine
-		nextLemma, posInLine, err := nextSense(dataLine, posInLine)
+	fromPos := 17
+	for i := 0; i < w_cnt; i++ {
+		nextLemma, posInLine, err := nextSense(dataLine, fromPos)
+		fromPos = posInLine + 2
 		if err != nil {
 			return nil, err
 		}
@@ -118,38 +122,40 @@ func parseDataLine(dataLine []byte) (*dataData, os.Error) {
 	return data, nil
 }
 
-func nextSense(line []byte, pos int) (*lemma, int,  os.Error) {
+func nextSense(line []byte, pos int) (*lemma, int, error) {
 	lemma := &lemma{}
 	acc := make([]byte, 30)
-	i := pos
-	for i,ch := range line[pos:] {
+	from := pos
+	for i, ch := range line[pos:] {
 		fmt.Printf("[C]:%c (%d)\n", ch, i)
 		if ch == ' ' {
 			lemma.word = acc
+			from += i
 			break
 		}
 		acc[i] = ch
 	}
-	fmt.Printf("")
-	xval := line[pos + i + 1]
+	fmt.Printf("[POS]:%d\n",from+1)
+	xval := line[from+1]
 	fmt.Printf("xvalByte: %c\n", xval)
 	ival, ok := fromHexChar(xval)
 	if !ok {
-		return nil, 0, os.NewError(fmt.Sprintf("Invalid hex byte (%c)", xval))
+		return nil, 0, errors.New(fmt.Sprintf("Invalid hex byte (%c)", xval))
 	}
 	lemma.lex_id = int(ival)
-	return lemma, (pos + i + 1), nil
+	return lemma, (from + 1), nil
 }
 
 func main() {
-	file := "/home/mp/Downloads/WordNet-3.0/dict/data.noun"
+	file := "/Users/pignatelli/Downloads/WordNet-3.0/dict/data.noun"
+//	file := "/home/mp/Downloads/WordNet-3.0/dict/data.noun"
 	fh, err := os.Open(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 	pos := 34777
 	line := dataLookup(fh, int64(pos))
-	fmt.Printf("[LINE] %s\n",line)
+	fmt.Printf("[LINE] %s\n", line)
 
 	data, err := parseDataLine(line)
 	if err != nil {
@@ -159,13 +165,13 @@ func main() {
 	fmt.Printf("[LEX_FILENUM] %d\n", data.lex_filenum)
 	fmt.Printf("[SS_TYPE] %c\n", data.ss_type)
 	fmt.Printf("[W_CNT] %d\n", data.w_cnt)
-	fmt.Printf("[GLOSS] %s\n",data.gloss)
+	fmt.Printf("[GLOSS] %s\n", data.gloss)
 }
 
 // Utility function to convert a 2-digit hexadecimal number to int
-func x2i(src []byte) (int, os.Error) {
+func x2i(src []byte) (int, error) {
 	if len(src) != 2 {
-		return 0, os.NewError(fmt.Sprintf("Only 2-bytes hexadecimal integers allowed (passed [%s])\n", src))
+		return 0, errors.New(fmt.Sprintf("Only 2-bytes hexadecimal integers allowed (passed [%s])\n", src))
 	}
 	d1, ok := fromHexChar(src[0])
 	if !ok {
