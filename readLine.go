@@ -112,13 +112,19 @@ func parseDataLine(dataLine []byte) (*dataData, error) {
 	fromPos := 17
 	for i := 0; i < w_cnt; i++ {
 		nextLemma, posInLine, err := nextSense(dataLine, fromPos)
-		fromPos = posInLine + 2
+		fromPos = posInLine
 		if err != nil {
 			return nil, err
 		}
 		lemmas[i] = nextLemma
 	}
 	data.lemmas = lemmas
+
+	// p_cnt
+	p_cntBytes := dataLine[fromPos:fromPos+3]
+	fmt.Printf("p_cnt: [%s]\n", p_cnt)
+	
+
 	return data, nil
 }
 
@@ -127,7 +133,6 @@ func nextSense(line []byte, pos int) (*lemma, int, error) {
 	acc := make([]byte, 30)
 	from := pos
 	for i, ch := range line[pos:] {
-		fmt.Printf("[C]:%c (%d)\n", ch, i)
 		if ch == ' ' {
 			lemma.word = acc
 			from += i
@@ -135,15 +140,13 @@ func nextSense(line []byte, pos int) (*lemma, int, error) {
 		}
 		acc[i] = ch
 	}
-	fmt.Printf("[POS]:%d\n",from+1)
 	xval := line[from+1]
-	fmt.Printf("xvalByte: %c\n", xval)
 	ival, ok := fromHexChar(xval)
 	if !ok {
 		return nil, 0, errors.New(fmt.Sprintf("Invalid hex byte (%c)", xval))
 	}
 	lemma.lex_id = int(ival)
-	return lemma, (from + 1), nil
+	return lemma, (from + 3), nil
 }
 
 func main() {
@@ -165,6 +168,10 @@ func main() {
 	fmt.Printf("[LEX_FILENUM] %d\n", data.lex_filenum)
 	fmt.Printf("[SS_TYPE] %c\n", data.ss_type)
 	fmt.Printf("[W_CNT] %d\n", data.w_cnt)
+	fmt.Printf("[LEMMAS]\n")
+	for _, l := range data.lemmas {
+		fmt.Printf(" [LEMMA] %s %d\n", l.word, l.lex_id)
+	}
 	fmt.Printf("[GLOSS] %s\n", data.gloss)
 }
 
