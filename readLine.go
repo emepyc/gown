@@ -20,12 +20,22 @@ type lemma struct {
 	lex_id int // 1-digit hexadecimal integer
 }
 
+type synsetPtr struct {
+	symbol    []byte
+	offset    int64
+	pos       byte
+	source    int
+	target    int
+}
+
 type dataData struct {
 	synset_offset int64 // Current byte offset in the file represented as an 8-digit dec integer
 	lex_filenum   int   // 2-digit integer
 	ss_type       byte  // n => NOUN, v => VERB, a => ADJECTIVE, s => ADJECTIVE SATELLITE, r => ADVERB
 	w_cnt         int   // 2-digit hexadecimal integer
 	lemmas        []*lemma
+	p_cnt         int
+	ptrs          []*synsetPtr
 	gloss         []byte
 }
 
@@ -71,11 +81,11 @@ func parseDataLine(dataLine []byte) (*dataData, error) {
 	// synset_offset  --- not used
 	synsetOffsetBytes := dataLine[:8]
 	fmt.Printf("synsetOffsetBytes: [%s]\n", synsetOffsetBytes)
-	synset_offset, err := strconv.Atoi(string(synsetOffsetBytes))
+	synset_offset, err := strconv.Atoi64(string(synsetOffsetBytes))
 	if err != nil {
 		return nil, err
 	}
-	data.synset_offset = int64(synset_offset)
+	data.synset_offset = synset_offset
 
 	// lex_filenum  --- not used
 	lexFilenumBytes := dataLine[9:11]
@@ -112,18 +122,37 @@ func parseDataLine(dataLine []byte) (*dataData, error) {
 	fromPos := 17
 	for i := 0; i < w_cnt; i++ {
 		nextLemma, posInLine, err := nextSense(dataLine, fromPos)
-		fromPos = posInLine
 		if err != nil {
 			return nil, err
 		}
+		fromPos = posInLine
 		lemmas[i] = nextLemma
 	}
 	data.lemmas = lemmas
 
 	// p_cnt
 	p_cntBytes := dataLine[fromPos:fromPos+3]
-	fmt.Printf("p_cnt: [%s]\n", p_cnt)
-	
+	fmt.Printf("p_cnt: [%s]\n", p_cntBytes)
+	p_cnt, err := strconv.Atoi(string(p_cntBytes))
+	if err != nil {
+		return nil, err
+	}
+	data.p_cnt = p_cnt
+
+	// ptrs
+	ptrs := make([]*synsetPtr, p_cnt)
+	fromPos = fromPos + 4
+	for i := 0; i < p_cnt; i++ {
+		nextPtr, posInLine, err := nextPtr(dataLine, fromPos)
+		if err != nil {
+			return nil, err
+		}
+		fromPos = posInLine
+		ptrs[i] = nextPtr
+	}
+	data.ptrs = ptrs
+
+	//frames: In data.verb only, a list of numbers corresponding to the generic verb sentence frames for word s in the synset. frames is of the form:
 
 	return data, nil
 }
@@ -135,44 +164,61 @@ func nextSense(line []byte, pos int) (*lemma, int, error) {
 	for i, ch := range line[pos:] {
 		if ch == ' ' {
 			lemma.word = acc
-			from += i
+			from += i + 1
 			break
 		}
 		acc[i] = ch
 	}
-	xval := line[from+1]
+	xval := line[from]
 	ival, ok := fromHexChar(xval)
 	if !ok {
 		return nil, 0, errors.New(fmt.Sprintf("Invalid hex byte (%c)", xval))
 	}
 	lemma.lex_id = int(ival)
-	return lemma, (from + 3), nil
+
+	return lemma, (from + 2), nil
 }
 
-func main() {
-	file := "/Users/pignatelli/Downloads/WordNet-3.0/dict/data.noun"
-//	file := "/home/mp/Downloads/WordNet-3.0/dict/data.noun"
-	fh, err := os.Open(file)
-	if err != nil {
-		log.Fatal(err)
+func nextPtr(line []byte, pos int) (*synsetPtr, int, error) {
+	ptr := &synsetPtr{}
+	acc := make([]byte, 0, 2)
+	from := pos
+	for i, ch := range line[pos:] {
+		if ch == ' ' {
+			ptr.symbol = acc
+			from += i + 1
+			break
+		}
+		acc = append(acc, ch) // at most 2 digits in symbol
 	}
-	pos := 34777
-	line := dataLookup(fh, int64(pos))
-	fmt.Printf("[LINE] %s\n", line)
+	offsetBytes := line[from:from+8]
+	offset, err := strconv.Atoi64(string(offsetBytes))
+	if err != nil {
+		return nil, 0, err
+	}
+	ptr.offset = offset
+	from = from + 9
 
-	data, err := parseDataLine(line)
+	ptrpos := line[from]
+	ptr.pos = ptrpos
+
+	from = from+2
+	sourceBytes := line[from:from+2]
+	source, err := x2i(sourceBytes)
 	if err != nil {
-		log.Fatal(err)
+		return nil, 0, err
 	}
-	fmt.Printf("[SYNSET_OFFSET] %d\n", data.synset_offset)
-	fmt.Printf("[LEX_FILENUM] %d\n", data.lex_filenum)
-	fmt.Printf("[SS_TYPE] %c\n", data.ss_type)
-	fmt.Printf("[W_CNT] %d\n", data.w_cnt)
-	fmt.Printf("[LEMMAS]\n")
-	for _, l := range data.lemmas {
-		fmt.Printf(" [LEMMA] %s %d\n", l.word, l.lex_id)
+	ptr.source = source
+
+	from = from+2
+	targetBytes := line[from:from+2]
+	target, err := x2i(targetBytes)
+	if err != nil {
+		return nil, 0, err
 	}
-	fmt.Printf("[GLOSS] %s\n", data.gloss)
+	ptr.target = target
+
+	return ptr, from + 3, nil
 }
 
 // Utility function to convert a 2-digit hexadecimal number to int
@@ -203,3 +249,39 @@ func fromHexChar(c byte) (byte, bool) {
 	}
 	return 0, false
 }
+
+func main() {
+//	file := "/Users/pignatelli/Downloads/WordNet-3.0/dict/data.noun"
+	file := "/home/mp/Downloads/WordNet-3.0/dict/data.noun"
+	fh, err := os.Open(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pos := 952963 // 576451 // 37396 //34777
+	line := dataLookup(fh, int64(pos))
+	fmt.Printf("[LINE] %s\n", line)
+
+	data, err := parseDataLine(line)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("[SYNSET_OFFSET] %d\n", data.synset_offset)
+	fmt.Printf("[LEX_FILENUM] %d\n", data.lex_filenum)
+	fmt.Printf("[SS_TYPE] %c\n", data.ss_type)
+	fmt.Printf("[W_CNT] %d\n", data.w_cnt)
+	fmt.Printf("[LEMMAS]\n")
+	for _, l := range data.lemmas {
+		fmt.Printf(" [LEMMA] %s %d\n", l.word, l.lex_id)
+	}
+	fmt.Printf("[P_CNT] %d\n", data.p_cnt)
+	fmt.Printf("[PTRS]\n")
+	for _, l := range data.ptrs {
+		fmt.Printf(" [SYMBOL] %s\n", l.symbol)
+		fmt.Printf(" [OFFSET] %d\n", l.offset)
+		fmt.Printf(" [POS] %c\n", l.pos)
+		fmt.Printf(" [SOURCE] %d\n", l.source)
+		fmt.Printf(" [TARGET] %d\n", l.target)
+	}
+	fmt.Printf("[GLOSS] %s\n", data.gloss)
+}
+
