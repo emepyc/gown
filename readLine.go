@@ -67,6 +67,25 @@ func dataLookup(fh *os.File, offset int64) []byte {
 	return nil
 }
 
+func GetRelation(dataLine []byte, symbol []byte) ([]synsetPtr, error) {
+	ptrs := make([]synsetPtr, 0, 2) // larger cap?
+	for {
+		posInLine := bytes.Index(dataLine, symbol)
+		if posInLine < 0 { // no occurrence
+			return ptrs, nil
+		}
+		
+		ptr, newPos, err := nextPtr(dataLine, posInLine)
+		if err != nil {
+			return nil, err
+		}
+		dataLine = dataLine[newPos:]
+		ptrs = append(ptrs, *ptr)
+	}
+	log.Fatal("We can't be here")
+	return nil, nil // never reached!!
+}
+
 func parseDataLine(dataLine []byte) (*dataData, error) {
 	data := &dataData{}
 	var err error
@@ -257,10 +276,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pos := 952963 // 576451 // 37396 //34777
+	pos := 8199025  //952963 //  576451 // 37396 //34777
 	line := dataLookup(fh, int64(pos))
 	fmt.Printf("[LINE] %s\n", line)
 
+	symbol := []byte{';','c'}
+	hypernyms, err := GetRelation(line, symbol)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	fmt.Printf("========\n%s\n==========\n[PTRS]\n", symbol)
+	for _, l := range hypernyms {
+		fmt.Printf(" [SYMBOL] %s\n", l.symbol)
+		fmt.Printf(" [OFFSET] %d\n", l.offset)
+		fmt.Printf(" [POS] %c\n", l.pos)
+		fmt.Printf(" [SOURCE] %d\n", l.source)
+		fmt.Printf(" [TARGET] %d\n", l.target)
+	}
+	fmt.Printf("==================\n");
+//	os.Exit(0)
 	data, err := parseDataLine(line)
 	if err != nil {
 		log.Fatal(err)
